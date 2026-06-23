@@ -8,17 +8,20 @@ type PushState = { status: 'busy' | 'done' | 'failed'; message: string };
 type SyncStatus = 'synced' | 'no_url' | 'missing';
 
 const FILTER_LABELS: Record<Filter, string> = {
+  all: 'All contacts',
   ctwa: 'Chat leads (latest 5)',
   sourceUrl: 'Has source_url',
-  all: 'All contacts',
 };
 
 const CTWA_LIMIT = 5;
+const PAGE_SIZE = 7; // contacts per page in the "All contacts" view
 
 export default function WatiContacts() {
   const [contacts, setContacts] = useState<WatiContact[]>([]);
   const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState<Filter>('ctwa');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [scannedPages, setScannedPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,39 +68,60 @@ export default function WatiContacts() {
     }
   };
 
-  const load = useCallback(async (targetPage: number, targetFilter: Filter) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.getWatiContacts({
-        page: targetPage,
-        filter: targetFilter,
-        limit: targetFilter === 'ctwa' ? CTWA_LIMIT : undefined,
-      });
-      setContacts(result.contacts);
-      setScannedPages(result.scannedPages);
-      void loadSyncStatuses(result.contacts);
-    } catch (err) {
-      setContacts([]);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [loadSyncStatuses]);
+  const load = useCallback(
+    async (targetPage: number, targetFilter: Filter, targetSearch: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await api.getWatiContacts({
+          page: targetPage,
+          filter: targetFilter,
+          limit: targetFilter === 'ctwa' ? CTWA_LIMIT : undefined,
+          pageSize: targetFilter === 'all' ? PAGE_SIZE : undefined,
+          search: targetSearch || undefined,
+        });
+        setContacts(result.contacts);
+        setScannedPages(result.scannedPages);
+        void loadSyncStatuses(result.contacts);
+      } catch (err) {
+        setContacts([]);
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loadSyncStatuses],
+  );
+
+  // Debounce the search box, and jump back to page 1 whenever the term changes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
-    void load(page, filter);
+    void load(page, filter, search);
     // Auto-refresh: the server caches Wati responses for 60s, so polling at the
     // same cadence picks up new chat leads about a minute after they arrive.
-    const timer = setInterval(() => void load(page, filter), 60_000);
+    const timer = setInterval(() => void load(page, filter, search), 60_000);
     return () => clearInterval(timer);
-  }, [load, page, filter]);
+  }, [load, page, filter, search]);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-700">Wati contacts</h2>
-        <div className="flex items-center gap-3 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by name…"
+            className="rounded border border-slate-300 px-2 py-1"
+          />
           <select
             value={filter}
             onChange={(e) => {
@@ -124,7 +148,7 @@ export default function WatiContacts() {
               Page {page}
               <button
                 onClick={() => setPage((p) => p + 1)}
-                disabled={loading || contacts.length < 50}
+                disabled={loading || contacts.length < PAGE_SIZE}
                 className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-50 disabled:opacity-50"
               >
                 Next
@@ -132,7 +156,7 @@ export default function WatiContacts() {
             </span>
           )}
           <button
-            onClick={() => void load(page, filter)}
+            onClick={() => void load(page, filter, search)}
             disabled={loading}
             className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-50 disabled:opacity-50"
           >

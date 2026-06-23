@@ -41,8 +41,10 @@ function toContact(raw: RawWatiContact): WatiContact {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function fetchPage(page: number, pageSize: number): Promise<WatiContact[]> {
-  const url = `${env.watiApiEndpoint}/api/v1/getContacts?pageSize=${pageSize}&pageNumber=${page}`;
+async function fetchPage(page: number, pageSize: number, name?: string): Promise<WatiContact[]> {
+  const params = new URLSearchParams({ pageSize: String(pageSize), pageNumber: String(page) });
+  if (name) params.set('name', name); // Wati does a substring match on the contact name
+  const url = `${env.watiApiEndpoint}/api/v1/getContacts?${params.toString()}`;
   const maxRetries = 3;
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(url, {
@@ -90,12 +92,13 @@ export async function listWatiContacts(
   filter: WatiContactFilter,
   requestId: string,
   limit?: number,
+  name?: string,
 ): Promise<{ contacts: WatiContact[]; scannedPages: number }> {
   if (!watiConfigured()) {
     throw new Error('WATI_API_ENDPOINT / WATI_API_TOKEN are not set in .env');
   }
 
-  const cacheKey = `${filter}:${page}:${pageSize}:${limit ?? 'all'}`;
+  const cacheKey = `${filter}:${page}:${pageSize}:${limit ?? 'all'}:${name ?? ''}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.value;
   // Coalesce concurrent identical requests into one Wati scan.
@@ -104,7 +107,7 @@ export async function listWatiContacts(
 
   const work = (async () => {
     if (filter === 'all') {
-      return { contacts: await fetchPage(page, pageSize), scannedPages: 1 };
+      return { contacts: await fetchPage(page, pageSize, name), scannedPages: 1 };
     }
     const predicate = FILTER_PREDICATES[filter];
     const maxScanPages = 10;
@@ -112,7 +115,7 @@ export async function listWatiContacts(
     let scanned = 0;
     for (let p = 1; p <= maxScanPages; p++) {
       if (p > 1) await sleep(300); // pace the scan to stay under Wati's rate limit
-      const batch = await fetchPage(p, 100);
+      const batch = await fetchPage(p, 100, name);
       scanned = p;
       matches.push(...batch.filter(predicate));
       // Contacts come newest-first, so once we have `limit` matches we can stop early.

@@ -192,8 +192,10 @@ app.get('/wati/contacts', async (req, res) => {
   const filter: WatiContactFilter =
     req.query.filter === 'ctwa' || req.query.filter === 'sourceUrl' ? req.query.filter : 'all';
   const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : undefined;
+  const search =
+    typeof req.query.search === 'string' && req.query.search.trim() !== '' ? req.query.search.trim() : undefined;
   try {
-    const result = await listWatiContacts(page, pageSize, filter, requestId, limit);
+    const result = await listWatiContacts(page, pageSize, filter, requestId, limit, search);
     res.json(result);
   } catch (err) {
     res.status(502).json({

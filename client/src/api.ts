@@ -101,10 +101,17 @@ export const api = {
       '/wati/push',
       { method: 'POST', body: JSON.stringify(input) },
     ),
-  getWatiContacts: (params: { page: number; filter: 'all' | 'ctwa' | 'sourceUrl'; limit?: number }) =>
+  getWatiContacts: (params: {
+    page: number;
+    filter: 'all' | 'ctwa' | 'sourceUrl';
+    limit?: number;
+    pageSize?: number;
+    search?: string;
+  }) =>
     http<{ contacts: WatiContact[]; scannedPages: number }>(
-      `/wati/contacts?page=${params.page}&pageSize=50&filter=${params.filter}` +
-        (params.limit ? `&limit=${params.limit}` : ''),
+      `/wati/contacts?page=${params.page}&pageSize=${params.pageSize ?? 50}&filter=${params.filter}` +
+        (params.limit ? `&limit=${params.limit}` : '') +
+        (params.search ? `&search=${encodeURIComponent(params.search)}` : ''),
     ),
   sendSample: () => http<Record<string, unknown>>('/test/sample', { method: 'POST' }),
 };
