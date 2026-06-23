@@ -6,8 +6,8 @@ interface Props {
   onSaved: () => void;
 }
 
-const secretPlaceholder = (set: boolean, hint: string): string =>
-  set ? `Saved (${hint}) — leave blank to keep` : 'Not set';
+const secretPlaceholder = (s: { set: boolean; hint: string; length: number }): string =>
+  s.set ? `Saved (${s.hint}, ${s.length} chars) — leave blank to keep` : 'Not set';
 
 export default function SettingsModal({ onClose, onSaved }: Props) {
   const [status, setStatus] = useState<SettingsStatus | null>(null);
@@ -84,7 +84,7 @@ export default function SettingsModal({ onClose, onSaved }: Props) {
               autoComplete="off"
               value={hubspotAccessToken}
               onChange={(e) => setHubspotAccessToken(e.target.value)}
-              placeholder={status ? secretPlaceholder(status.hubspotAccessToken.set, status.hubspotAccessToken.hint) : '…'}
+              placeholder={status ? secretPlaceholder(status.hubspotAccessToken) : '…'}
               className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
             />
           </Field>
@@ -95,7 +95,7 @@ export default function SettingsModal({ onClose, onSaved }: Props) {
               autoComplete="off"
               value={watiWebhookSecret}
               onChange={(e) => setWatiWebhookSecret(e.target.value)}
-              placeholder={status ? secretPlaceholder(status.watiWebhookSecret.set, status.watiWebhookSecret.hint) : '…'}
+              placeholder={status ? secretPlaceholder(status.watiWebhookSecret) : '…'}
               className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
             />
           </Field>
@@ -116,7 +116,7 @@ export default function SettingsModal({ onClose, onSaved }: Props) {
               autoComplete="off"
               value={watiApiToken}
               onChange={(e) => setWatiApiToken(e.target.value)}
-              placeholder={status ? secretPlaceholder(status.watiApiToken.set, status.watiApiToken.hint) : '…'}
+              placeholder={status ? secretPlaceholder(status.watiApiToken) : '…'}
               className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
             />
           </Field>

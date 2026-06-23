@@ -8,6 +8,7 @@ export interface Health {
 export interface SecretStatus {
   set: boolean;
   hint: string;
+  length: number;
 }
 
 export interface SettingsStatus {

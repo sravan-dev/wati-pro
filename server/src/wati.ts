@@ -53,7 +53,12 @@ async function fetchPage(page: number, pageSize: number): Promise<WatiContact[]>
       await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt);
       continue;
     }
-    if (!res.ok) throw new Error(`Wati getContacts failed with ${res.status}`);
+    if (!res.ok) {
+      // Surface Wati's own message — its 4xx body says *why* (bad token, IP
+      // restriction, expired plan…), which is far more useful than the status.
+      const detail = (await res.text()).slice(0, 300).replace(/\s+/g, ' ').trim();
+      throw new Error(`Wati getContacts failed with ${res.status}${detail ? `: ${detail}` : ''}`);
+    }
     const body = (await res.json()) as { contact_list?: RawWatiContact[] };
     return (body.contact_list ?? []).map(toContact);
   }

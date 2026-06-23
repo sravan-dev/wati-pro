@@ -44,9 +44,12 @@ function applySettings(settings: Settings): void {
 const savedSettings = settingsStore.load();
 if (savedSettings) applySettings(savedSettings);
 
-/** Mask a secret for display: keep only the last 4 chars. */
-const maskSecret = (value: string): string =>
-  value === '' ? '' : '••••' + value.slice(-4);
+/** Mask a secret for display: keep only the last 4 chars plus its length (for spotting truncation). */
+const secretStatus = (value: string): { set: boolean; hint: string; length: number } => ({
+  set: value.trim() !== '',
+  hint: value === '' ? '' : '••••' + value.slice(-4),
+  length: value.length,
+});
 
 /** Log any mapped HubSpot properties that don't exist yet (the UI offers to create them). */
 async function reportMissingProperties(requestId: string): Promise<void> {
@@ -115,10 +118,10 @@ app.put('/config/mapping', async (req, res) => {
 // their last 4 chars; the (non-secret) Wati API endpoint is returned in full.
 app.get('/config/settings', (_req, res) => {
   res.json({
-    hubspotAccessToken: { set: env.hubspotAccessToken.trim() !== '', hint: maskSecret(env.hubspotAccessToken) },
-    watiWebhookSecret: { set: env.watiWebhookSecret.trim() !== '', hint: maskSecret(env.watiWebhookSecret) },
+    hubspotAccessToken: secretStatus(env.hubspotAccessToken),
+    watiWebhookSecret: secretStatus(env.watiWebhookSecret),
     watiApiEndpoint: env.watiApiEndpoint,
-    watiApiToken: { set: env.watiApiToken.trim() !== '', hint: maskSecret(env.watiApiToken) },
+    watiApiToken: secretStatus(env.watiApiToken),
   });
 });
 
