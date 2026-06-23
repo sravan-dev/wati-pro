@@ -9,7 +9,7 @@ import { logError, logInfo } from './logger.js';
 import { InMemorySyncLogStore } from './logs.js';
 import { defaultMappingPath, JsonFileMappingStore, mappingSchema } from './mapping.js';
 import { processLead, SAMPLE_WATI_PAYLOAD, watiPayloadSchema } from './sync.js';
-import { listWatiContacts, type WatiContactFilter } from './wati.js';
+import { listWatiContacts, watiConfigured, type WatiContactFilter } from './wati.js';
 
 const app = express();
 app.use(express.json({ limit: '256kb' }));
@@ -58,7 +58,12 @@ app.post('/webhook/wati', async (req, res) => {
 
 app.get('/health', async (_req, res) => {
   const ok = await hubspot.checkToken(newRequestId());
-  res.json({ hubspot: ok, webhookSecretSet: env.watiWebhookSecret.trim() !== '' });
+  res.json({
+    hubspot: ok,
+    webhookSecretSet: env.watiWebhookSecret.trim() !== '',
+    watiApiConfigured: watiConfigured(),
+    watiApiEndpointSet: env.watiApiEndpoint !== '',
+  });
 });
 
 app.get('/config/mapping', (_req, res) => {
