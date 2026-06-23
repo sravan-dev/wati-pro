@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 env.txt
+env.local.js
 server/data/mapping.json
 desktop.ini
 *.log
