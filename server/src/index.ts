@@ -190,7 +190,9 @@ app.get('/wati/contacts', async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
   const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 50, 1), 100);
   const filter: WatiContactFilter =
-    req.query.filter === 'ctwa' || req.query.filter === 'sourceUrl' ? req.query.filter : 'all';
+    req.query.filter === 'inbox' || req.query.filter === 'ctwa' || req.query.filter === 'sourceUrl'
+      ? req.query.filter
+      : 'all';
   const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : undefined;
   const search =
     typeof req.query.search === 'string' && req.query.search.trim() !== '' ? req.query.search.trim() : undefined;

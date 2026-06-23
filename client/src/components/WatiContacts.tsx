@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type WatiContact } from '../api';
 
-type Filter = 'all' | 'ctwa' | 'sourceUrl';
+type Filter = 'all' | 'inbox' | 'ctwa' | 'sourceUrl';
 
 type PushState = { status: 'busy' | 'done' | 'failed'; message: string };
 
 type SyncStatus = 'synced' | 'no_url' | 'missing';
 
 const FILTER_LABELS: Record<Filter, string> = {
+  inbox: 'Active chats (inbox)',
   all: 'All contacts',
   ctwa: 'Chat leads (latest 5)',
   sourceUrl: 'Has source_url',
@@ -19,7 +20,7 @@ const PAGE_SIZE = 7; // contacts per page in the "All contacts" view
 export default function WatiContacts() {
   const [contacts, setContacts] = useState<WatiContact[]>([]);
   const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('inbox');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [scannedPages, setScannedPages] = useState(0);
@@ -179,7 +180,9 @@ export default function WatiContacts() {
             <p className="mb-2 text-xs text-slate-500">
               {filter === 'ctwa'
                 ? `Latest ${contacts.length} CTWA lead${contacts.length === 1 ? '' : 's'}, newest first.`
-                : `${contacts.length} contact${contacts.length === 1 ? '' : 's'} with a source_url (scanned ${scannedPages * 100} most recent contacts).`}
+                : filter === 'inbox'
+                  ? `${contacts.length} active chat${contacts.length === 1 ? '' : 's'} (scanned ${scannedPages * 100} most recent contacts).`
+                  : `${contacts.length} contact${contacts.length === 1 ? '' : 's'} with a source_url (scanned ${scannedPages * 100} most recent contacts).`}
             </p>
           )}
           <table className="w-full text-left text-xs">
@@ -188,6 +191,7 @@ export default function WatiContacts() {
                 <th className="py-2 pr-3 font-medium">Name</th>
                 <th className="py-2 pr-3 font-medium">Phone</th>
                 <th className="py-2 pr-3 font-medium">Source</th>
+                <th className="py-2 pr-3 font-medium">Campaign</th>
                 <th className="py-2 pr-3 font-medium">Channel</th>
                 <th className="py-2 pr-3 font-medium">source_url</th>
                 <th className="py-2 pr-3 font-medium">Created</th>
@@ -206,6 +210,9 @@ export default function WatiContacts() {
                     ) : (
                       (contact.watiSource ?? '—')
                     )}
+                  </td>
+                  <td className="py-2 pr-3 max-w-[12rem] truncate" title={contact.campaign ?? ''}>
+                    {contact.campaign ?? '—'}
                   </td>
                   <td className="py-2 pr-3 whitespace-nowrap">{contact.channel ?? '—'}</td>
                   <td className="py-2 pr-3 max-w-xs truncate" title={contact.sourceUrl ?? ''}>

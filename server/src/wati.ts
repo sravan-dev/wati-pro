@@ -9,6 +9,7 @@ export interface WatiContact {
   sourceUrl: string | null;
   campaign: string | null;
   created: string | null;
+  contactStatus: string | null;
 }
 
 interface RawWatiContact {
@@ -17,6 +18,7 @@ interface RawWatiContact {
   phone?: string | null;
   source?: string | null;
   created?: string | null;
+  contactStatus?: string | null;
   customParams?: Array<{ name?: string; value?: string }> | null;
 }
 
@@ -36,6 +38,7 @@ function toContact(raw: RawWatiContact): WatiContact {
     sourceUrl: params.get('source_url') ?? null,
     campaign: params.get('campaign_name') ?? null,
     created: raw.created ?? null,
+    contactStatus: raw.contactStatus ?? null,
   };
 }
 
@@ -72,9 +75,12 @@ const CACHE_TTL_MS = 60_000;
 const cache = new Map<string, { at: number; value: { contacts: WatiContact[]; scannedPages: number } }>();
 const pending = new Map<string, Promise<{ contacts: WatiContact[]; scannedPages: number }>>();
 
-export type WatiContactFilter = 'all' | 'ctwa' | 'sourceUrl';
+export type WatiContactFilter = 'all' | 'inbox' | 'ctwa' | 'sourceUrl';
 
 const FILTER_PREDICATES: Record<Exclude<WatiContactFilter, 'all'>, (c: WatiContact) => boolean> = {
+  // Active chat inbox: contacts with a confirmed WhatsApp conversation. Wati marks
+  // these VALID; bulk HubSpot imports that never chatted stay UNCONFIRMED.
+  inbox: (c) => (c.contactStatus ?? '').toUpperCase() === 'VALID',
   // Inbound chat leads: CTWA (clicked a FB/IG ad) or direct WhatsApp messages.
   // Everything else in Wati is a HubSpot import with no chat behind it.
   ctwa: (c) => ['CTWA', 'WHATSAPP', 'WA'].includes((c.watiSource ?? '').toUpperCase()),

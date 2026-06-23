@@ -62,6 +62,7 @@ export interface WatiContact {
   sourceUrl: string | null;
   campaign: string | null;
   created: string | null;
+  contactStatus: string | null;
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
@@ -103,7 +104,7 @@ export const api = {
     ),
   getWatiContacts: (params: {
     page: number;
-    filter: 'all' | 'ctwa' | 'sourceUrl';
+    filter: 'all' | 'inbox' | 'ctwa' | 'sourceUrl';
     limit?: number;
     pageSize?: number;
     search?: string;
