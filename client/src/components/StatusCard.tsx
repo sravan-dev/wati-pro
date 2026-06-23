@@ -41,11 +41,15 @@ export default function StatusCard() {
         <ul className="space-y-2 text-sm text-slate-700">
           <li className="flex items-center gap-2">
             <Dot ok={health.hubspot} />
-            HubSpot token {health.hubspot ? 'valid' : 'missing or invalid — set HUBSPOT_ACCESS_TOKEN in .env'}
+            HubSpot token {health.hubspot ? 'valid' : 'missing or invalid — set it in Settings'}
           </li>
           <li className="flex items-center gap-2">
             <Dot ok={health.webhookSecretSet} />
-            Webhook secret {health.webhookSecretSet ? 'set' : 'not set — set WATI_WEBHOOK_SECRET in .env'}
+            Webhook secret {health.webhookSecretSet ? 'set' : 'not set — set it in Settings'}
+          </li>
+          <li className="flex items-center gap-2">
+            <Dot ok={health.watiApiConfigured ?? false} />
+            Wati API {health.watiApiConfigured ? 'configured' : 'not set (optional — for the contacts table)'}
           </li>
         </ul>
       )}

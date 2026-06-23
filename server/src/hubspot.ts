@@ -20,7 +20,12 @@ export class HubSpotError extends Error {
 }
 
 export class HubSpotService {
-  constructor(private readonly accessToken: string) {}
+  constructor(private accessToken: string) {}
+
+  /** Swap the token at runtime (used when credentials are saved from the dashboard). */
+  setAccessToken(token: string): void {
+    this.accessToken = token;
+  }
 
   get configured(): boolean {
     return this.accessToken.trim() !== '';

@@ -1,6 +1,27 @@
 export interface Health {
   hubspot: boolean;
   webhookSecretSet: boolean;
+  watiApiConfigured?: boolean;
+  watiApiEndpointSet?: boolean;
+}
+
+export interface SecretStatus {
+  set: boolean;
+  hint: string;
+}
+
+export interface SettingsStatus {
+  hubspotAccessToken: SecretStatus;
+  watiWebhookSecret: SecretStatus;
+  watiApiEndpoint: string;
+  watiApiToken: SecretStatus;
+}
+
+export interface SettingsUpdate {
+  hubspotAccessToken?: string;
+  watiWebhookSecret?: string;
+  watiApiEndpoint?: string;
+  watiApiToken?: string;
 }
 
 export interface MappingRow {
@@ -56,6 +77,9 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   getHealth: () => http<Health>('/health'),
+  getSettings: () => http<SettingsStatus>('/config/settings'),
+  saveSettings: (input: SettingsUpdate) =>
+    http<{ ok: boolean }>('/config/settings', { method: 'PUT', body: JSON.stringify(input) }),
   getMapping: () => http<Mapping>('/config/mapping'),
   saveMapping: (mapping: Mapping) =>
     http<{ ok: boolean }>('/config/mapping', { method: 'PUT', body: JSON.stringify(mapping) }),

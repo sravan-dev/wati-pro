@@ -4,5 +4,6 @@ dist/
 env.txt
 env.local.js
 server/data/mapping.json
+server/data/settings.json
 desktop.ini
 *.log

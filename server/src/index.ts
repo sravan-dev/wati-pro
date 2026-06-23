@@ -8,6 +8,13 @@ import { HubSpotService } from './hubspot.js';
 import { logError, logInfo } from './logger.js';
 import { InMemorySyncLogStore } from './logs.js';
 import { defaultMappingPath, JsonFileMappingStore, mappingSchema } from './mapping.js';
+import {
+  defaultSettingsPath,
+  EMPTY_SETTINGS,
+  JsonFileSettingsStore,
+  settingsUpdateSchema,
+  type Settings,
+} from './settings.js';
 import { processLead, SAMPLE_WATI_PAYLOAD, watiPayloadSchema } from './sync.js';
 import { listWatiContacts, watiConfigured, type WatiContactFilter } from './wati.js';
 
@@ -16,10 +23,30 @@ app.use(express.json({ limit: '256kb' }));
 
 const hubspot = new HubSpotService(env.hubspotAccessToken);
 const mappingStore = new JsonFileMappingStore(defaultMappingPath);
+const settingsStore = new JsonFileSettingsStore(defaultSettingsPath);
 const logs = new InMemorySyncLogStore();
 let mapping = mappingStore.load();
 
 const newRequestId = (): string => crypto.randomBytes(4).toString('hex');
+
+/** Apply saved credentials to the live runtime — non-empty fields win over .env. */
+function applySettings(settings: Settings): void {
+  if (settings.hubspotAccessToken) {
+    env.hubspotAccessToken = settings.hubspotAccessToken;
+    hubspot.setAccessToken(settings.hubspotAccessToken);
+  }
+  if (settings.watiWebhookSecret) env.watiWebhookSecret = settings.watiWebhookSecret;
+  if (settings.watiApiEndpoint) env.watiApiEndpoint = settings.watiApiEndpoint.replace(/\/+$/, '');
+  if (settings.watiApiToken) env.watiApiToken = settings.watiApiToken;
+}
+
+// On boot, overlay any saved dashboard settings on top of the .env-derived config.
+const savedSettings = settingsStore.load();
+if (savedSettings) applySettings(savedSettings);
+
+/** Mask a secret for display: keep only the last 4 chars. */
+const maskSecret = (value: string): string =>
+  value === '' ? '' : '••••' + value.slice(-4);
 
 /** Log any mapped HubSpot properties that don't exist yet (the UI offers to create them). */
 async function reportMissingProperties(requestId: string): Promise<void> {
@@ -81,6 +108,41 @@ app.put('/config/mapping', async (req, res) => {
   mappingStore.save(mapping);
   logInfo(requestId, 'Mapping saved', { rows: mapping.rows.length });
   await reportMissingProperties(requestId);
+  res.json({ ok: true });
+});
+
+// Report current credentials without leaking secrets: secrets are masked to
+// their last 4 chars; the (non-secret) Wati API endpoint is returned in full.
+app.get('/config/settings', (_req, res) => {
+  res.json({
+    hubspotAccessToken: { set: env.hubspotAccessToken.trim() !== '', hint: maskSecret(env.hubspotAccessToken) },
+    watiWebhookSecret: { set: env.watiWebhookSecret.trim() !== '', hint: maskSecret(env.watiWebhookSecret) },
+    watiApiEndpoint: env.watiApiEndpoint,
+    watiApiToken: { set: env.watiApiToken.trim() !== '', hint: maskSecret(env.watiApiToken) },
+  });
+});
+
+// Save credentials to settings.json and apply them live (no restart needed).
+// Only non-empty fields are updated, so leaving a field blank keeps the current value.
+app.put('/config/settings', (req, res) => {
+  const requestId = newRequestId();
+  const parsed = settingsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.message });
+    return;
+  }
+  const current = settingsStore.load() ?? { ...EMPTY_SETTINGS };
+  const update = parsed.data;
+  const merged: Settings = {
+    hubspotAccessToken: update.hubspotAccessToken?.trim() || current.hubspotAccessToken,
+    watiWebhookSecret: update.watiWebhookSecret?.trim() || current.watiWebhookSecret,
+    watiApiEndpoint:
+      update.watiApiEndpoint !== undefined ? update.watiApiEndpoint.trim() : current.watiApiEndpoint,
+    watiApiToken: update.watiApiToken?.trim() || current.watiApiToken,
+  };
+  settingsStore.save(merged);
+  applySettings(merged);
+  logInfo(requestId, 'Settings saved from dashboard');
   res.json({ ok: true });
 });
 
