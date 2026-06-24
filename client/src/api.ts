@@ -65,6 +65,16 @@ export interface WatiContact {
   contactStatus: string | null;
 }
 
+export interface Conversation {
+  phone: string;
+  name: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  lastDirection: 'in' | 'out';
+  unread: number;
+  source: string | null;
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { 'content-type': 'application/json' },
@@ -115,4 +125,11 @@ export const api = {
         (params.search ? `&search=${encodeURIComponent(params.search)}` : ''),
     ),
   sendSample: () => http<Record<string, unknown>>('/test/sample', { method: 'POST' }),
+  getWatiChats: (params: { page: number; pageSize?: number; search?: string }) =>
+    http<{ chats: Conversation[]; total: number }>(
+      `/wati/chats?page=${params.page}&pageSize=${params.pageSize ?? 7}` +
+        (params.search ? `&search=${encodeURIComponent(params.search)}` : ''),
+    ),
+  markChatRead: (phone: string) =>
+    http<{ ok: boolean }>('/wati/chats/read', { method: 'POST', body: JSON.stringify({ phone }) }),
 };

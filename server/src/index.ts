@@ -4,6 +4,7 @@ import path from 'node:path';
 import express from 'express';
 import { z } from 'zod';
 import { env, repoRoot } from './env.js';
+import { ConversationStore, defaultConversationsPath } from './conversations.js';
 import { HubSpotService } from './hubspot.js';
 import { logError, logInfo } from './logger.js';
 import { InMemorySyncLogStore } from './logs.js';
@@ -24,6 +25,7 @@ app.use(express.json({ limit: '256kb' }));
 const hubspot = new HubSpotService(env.hubspotAccessToken);
 const mappingStore = new JsonFileMappingStore(defaultMappingPath);
 const settingsStore = new JsonFileSettingsStore(defaultSettingsPath);
+const conversations = new ConversationStore(defaultConversationsPath);
 const logs = new InMemorySyncLogStore();
 let mapping = mappingStore.load();
 
@@ -84,6 +86,84 @@ app.post('/webhook/wati', async (req, res) => {
 
   const result = await processLead(parsed.data, requestId, hubspot, mapping, logs);
   res.status(200).json(result);
+});
+
+// Convert a Wati message-webhook timestamp to ISO. Wati sends `created` (ISO) and/or
+// `timestamp` (unix seconds, sometimes ms); fall back to now if neither is usable.
+function messageTimestamp(body: Record<string, unknown>): string {
+  if (typeof body.created === 'string' && body.created.trim() !== '') {
+    const d = new Date(body.created);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  const raw = Number(body.timestamp);
+  if (Number.isFinite(raw) && raw > 0) {
+    return new Date(raw > 1e12 ? raw : raw * 1000).toISOString();
+  }
+  return new Date().toISOString();
+}
+
+// Live inbox: Wati POSTs here on every message (Wati has no "list conversations"
+// API, so we mirror the inbox from these events). Configure a Wati webhook for
+// message events pointing at /webhook/wati-message?secret=<WATI_WEBHOOK_SECRET>.
+app.post('/webhook/wati-message', (req, res) => {
+  const requestId = newRequestId();
+  const querySecret = typeof req.query.secret === 'string' ? req.query.secret : undefined;
+  const secret = querySecret ?? req.header('x-webhook-secret');
+  if (!env.watiWebhookSecret || secret !== env.watiWebhookSecret) {
+    res.status(401).json({ ok: false, error: 'Invalid webhook secret' });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const phone = String(body.waId ?? body.whatsappNumber ?? body.phone ?? '').replace(/\D/g, '');
+  const eventType = String(body.eventType ?? body.type ?? '');
+  // Ignore pure status/ticket events (no message content) and anything without a phone.
+  const rawText = typeof body.text === 'string' ? body.text.trim() : '';
+  const messageType = typeof body.type === 'string' ? body.type : '';
+  const isStatusEvent = /status|ticket|template|sessionStatus/i.test(eventType) && rawText === '';
+  if (phone === '' || isStatusEvent || (rawText === '' && messageType === '')) {
+    res.status(200).json({ ok: true, ignored: true });
+    return;
+  }
+
+  const text = rawText !== '' ? rawText : `[${messageType}]`;
+  const direction: 'in' | 'out' = body.owner === true || body.fromMe === true ? 'out' : 'in';
+  const name =
+    (typeof body.senderName === 'string' && body.senderName) ||
+    (typeof body.name === 'string' && body.name) ||
+    undefined;
+  const source = typeof body.source === 'string' ? body.source : null;
+
+  conversations.record({ phone, name, text, at: messageTimestamp(body), direction, source });
+  logInfo(requestId, 'Wati message webhook', { phone, eventType, direction });
+  res.status(200).json({ ok: true });
+});
+
+// Live inbox list: newest activity first, with name/phone search and pagination.
+app.get('/wati/chats', (req, res) => {
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 7, 1), 100);
+  const search = (typeof req.query.search === 'string' ? req.query.search : '').trim().toLowerCase();
+  let chats = conversations.list();
+  if (search) {
+    const digits = search.replace(/\D/g, '');
+    chats = chats.filter(
+      (c) => c.name.toLowerCase().includes(search) || (digits !== '' && c.phone.includes(digits)),
+    );
+  }
+  const total = chats.length;
+  const start = (page - 1) * pageSize;
+  res.json({ chats: chats.slice(start, start + pageSize), total });
+});
+
+app.post('/wati/chats/read', (req, res) => {
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.replace(/\D/g, '') : '';
+  if (phone === '') {
+    res.status(400).json({ ok: false, error: 'phone is required' });
+    return;
+  }
+  conversations.markRead(phone);
+  res.json({ ok: true });
 });
 
 app.get('/health', async (_req, res) => {

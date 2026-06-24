@@ -5,5 +5,6 @@ env.txt
 env.local.js
 server/data/mapping.json
 server/data/settings.json
+server/data/conversations.json
 desktop.ini
 *.log

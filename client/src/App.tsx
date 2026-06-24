@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import LiveInbox from './components/LiveInbox';
 import LogTable from './components/LogTable';
 import MappingEditor from './components/MappingEditor';
 import SettingsModal from './components/SettingsModal';
@@ -31,6 +32,7 @@ export default function App() {
       </header>
       <StatusCard key={refreshKey} />
       <MappingEditor />
+      <LiveInbox />
       <WatiContacts />
       <LogTable />
 

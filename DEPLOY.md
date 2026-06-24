@@ -67,6 +67,23 @@ Set the Wati webhook URL to:
 https://<your-domain>/webhook/wati?secret=<WATI_WEBHOOK_SECRET>
 ```
 
+## Live inbox webhook (optional)
+
+The dashboard's **Live inbox (WhatsApp)** mirrors your Wati chats. Wati's API has no
+"list conversations" endpoint, so the inbox is built from message webhooks: Wati must
+POST each message to this app.
+
+In **Wati → Settings → Webhooks**, add a webhook:
+
+- **URL:** `https://<your-domain>/webhook/wati-message?secret=<WATI_WEBHOOK_SECRET>`
+- **Events:** the message events (e.g. *Message Received* / *Session Message Sent*).
+
+Use the same `WATI_WEBHOOK_SECRET` value that's in your settings/`.env`. Conversations
+are stored in `server/data/conversations.json` (gitignored) and survive restarts.
+
+Note: the inbox captures chats from when the webhook is configured onward — it can't
+backfill conversations that happened before, because Wati never exposed them via the API.
+
 ## Updating later
 
 ```bash
