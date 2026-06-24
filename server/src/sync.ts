@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import type { HubSpotService } from './hubspot.js';
+import { HubSpotError, type HubSpotService } from './hubspot.js';
 import { logError, logInfo } from './logger.js';
 import type { SyncLogStore } from './logs.js';
 import type { Mapping } from './mapping.js';
-import { extractWhatsappNumber, normalizePhone, splitName } from './phone.js';
+import { extractWhatsappNumber, lastTenDigits, normalizePhone, splitName } from './phone.js';
+import type { SyncedContactStore } from './synced-contacts.js';
 
 /** The webhook boundary: any JSON object; values validated/coerced per mapping row. */
 export const watiPayloadSchema = z.record(z.unknown());
@@ -75,6 +76,7 @@ export async function processLead(
   hubspot: HubSpotService,
   mapping: Mapping,
   logs: SyncLogStore,
+  syncedContacts: SyncedContactStore,
 ): Promise<SyncResult> {
   const phone = extractWhatsappNumber(payload);
   const properties = applyMapping(payload, mapping);
@@ -113,16 +115,53 @@ export async function processLead(
     return record('skipped', 'success', null, null);
   }
 
+  // 'wati_source_url' is the field the Update button pushes; tracking it lets the
+  // status check report 'synced' vs 'no_url'. (Depends on the default source_url mapping.)
+  const hasSourceUrl = 'wati_source_url' in syncedProperties;
+  const phoneKey = lastTenDigits(phone);
+
+  const remember = (hubspotContactId: string): void => {
+    syncedContacts.set(phoneKey, {
+      hubspotContactId,
+      phone,
+      hasSourceUrl,
+      lastSyncedAt: new Date().toISOString(),
+    });
+  };
+
   try {
+    // Ledger fast-path: if we've synced this number before, update that exact contact.
+    // This is immune to HubSpot's eventually-consistent search index, so a repeat sync
+    // never creates a duplicate.
+    const ledgerHit = syncedContacts.get(phoneKey);
+    if (ledgerHit) {
+      try {
+        await hubspot.updateContact(ledgerHit.hubspotContactId, syncedProperties, requestId);
+        remember(ledgerHit.hubspotContactId);
+        logInfo(requestId, 'Updated HubSpot contact (ledger)', { contactId: ledgerHit.hubspotContactId, phone });
+        return record('updated', 'success', ledgerHit.hubspotContactId, null);
+      } catch (err) {
+        if (err instanceof HubSpotError && err.status === 404) {
+          // Contact was deleted in HubSpot — drop the stale entry and re-resolve below.
+          syncedContacts.delete(phoneKey);
+          logInfo(requestId, 'Ledger contact gone (404) — falling back to search/create', { phoneKey });
+        } else {
+          throw err;
+        }
+      }
+    }
+
     const existingId = await hubspot.searchContactByPhone(phone, requestId);
     if (existingId) {
       // Update only the synced fields — leave phone (and anything the native
       // Wati↔HubSpot integration manages) untouched on existing contacts.
       await hubspot.updateContact(existingId, syncedProperties, requestId);
+      remember(existingId);
       logInfo(requestId, 'Updated HubSpot contact', { contactId: existingId, phone });
       return record('updated', 'success', existingId, null);
     }
     const newId = await hubspot.createContact(properties, requestId);
+    remember(newId);
     logInfo(requestId, 'Created HubSpot contact', { contactId: newId, phone });
     return record('created', 'success', newId, null);
   } catch (err) {

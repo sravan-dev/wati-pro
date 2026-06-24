@@ -1,3 +1,6 @@
+/** The last 10 digits of any phone-ish string — the shared match key across the app. */
+export const lastTenDigits = (value: string): string => value.replace(/\D/g, '').slice(-10);
+
 /** Normalize a phone-ish string to E.164 (`+<7-15 digits>`). Returns null if implausible. */
 export function normalizePhone(raw: string): string | null {
   const cleaned = raw.replace(/[^\d+]/g, '');

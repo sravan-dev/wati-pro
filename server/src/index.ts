@@ -16,6 +16,8 @@ import {
   settingsUpdateSchema,
   type Settings,
 } from './settings.js';
+import { lastTenDigits } from './phone.js';
+import { defaultSyncedContactsPath, JsonFileSyncedContactStore } from './synced-contacts.js';
 import { processLead, SAMPLE_WATI_PAYLOAD, watiPayloadSchema } from './sync.js';
 import { listWatiContacts, watiConfigured, type WatiContactFilter } from './wati.js';
 
@@ -26,6 +28,7 @@ const hubspot = new HubSpotService(env.hubspotAccessToken);
 const mappingStore = new JsonFileMappingStore(defaultMappingPath);
 const settingsStore = new JsonFileSettingsStore(defaultSettingsPath);
 const conversations = new ConversationStore(defaultConversationsPath);
+const syncedContacts = new JsonFileSyncedContactStore(defaultSyncedContactsPath);
 const logs = new InMemorySyncLogStore();
 let mapping = mappingStore.load();
 
@@ -84,7 +87,7 @@ app.post('/webhook/wati', async (req, res) => {
     return;
   }
 
-  const result = await processLead(parsed.data, requestId, hubspot, mapping, logs);
+  const result = await processLead(parsed.data, requestId, hubspot, mapping, logs, syncedContacts);
   res.status(200).json(result);
 });
 
@@ -292,8 +295,6 @@ const syncStatusSchema = z.object({
   phones: z.array(z.string().min(5)).min(1).max(50),
 });
 
-const lastDigits = (value: string): string => value.replace(/\D/g, '').slice(-10);
-
 // For each Wati phone, report whether a HubSpot contact exists and whether its
 // wati_source_url is already filled — powers the table's Sync column.
 app.post('/hubspot/sync-status', async (req, res) => {
@@ -304,12 +305,30 @@ app.post('/hubspot/sync-status', async (req, res) => {
     return;
   }
   const phones = parsed.data.phones;
-  const tokens = [...new Set(phones.map((p) => lastDigits(p)).filter((t) => t.length >= 7))];
+  const statuses: Record<string, { status: 'synced' | 'no_url' | 'missing'; contactId: string | null }> = {};
+
+  // Ledger first: a contact we've already synced is reported immediately, so the
+  // column stays correct even before HubSpot's search index catches up.
+  const unresolved: string[] = [];
+  for (const phone of phones) {
+    const ledger = syncedContacts.get(lastTenDigits(phone));
+    if (ledger) {
+      statuses[phone] = { status: ledger.hasSourceUrl ? 'synced' : 'no_url', contactId: ledger.hubspotContactId };
+    } else {
+      unresolved.push(phone);
+    }
+  }
+
+  if (unresolved.length === 0) {
+    res.json({ statuses });
+    return;
+  }
+
+  const tokens = [...new Set(unresolved.map((p) => lastTenDigits(p)).filter((t) => t.length >= 7))];
   try {
     const found = await hubspot.searchContactsByPhones(tokens, requestId);
-    const statuses: Record<string, { status: 'synced' | 'no_url' | 'missing'; contactId: string | null }> = {};
-    for (const phone of phones) {
-      const match = found.find((f) => f.phone !== null && lastDigits(f.phone) === lastDigits(phone));
+    for (const phone of unresolved) {
+      const match = found.find((f) => f.phone !== null && lastTenDigits(f.phone) === lastTenDigits(phone));
       if (!match) statuses[phone] = { status: 'missing', contactId: null };
       else if (match.watiSourceUrl) statuses[phone] = { status: 'synced', contactId: match.id };
       else statuses[phone] = { status: 'no_url', contactId: match.id };
@@ -341,7 +360,7 @@ app.post('/wati/push', async (req, res) => {
     source_url: sourceUrl,
   };
   if (name) payload.name = name;
-  const result = await processLead(payload, requestId, hubspot, mapping, logs);
+  const result = await processLead(payload, requestId, hubspot, mapping, logs, syncedContacts);
   res.status(200).json(result);
 });
 
@@ -350,7 +369,7 @@ app.get('/logs', (_req, res) => {
 });
 
 app.post('/test/sample', async (_req, res) => {
-  const result = await processLead(SAMPLE_WATI_PAYLOAD, newRequestId(), hubspot, mapping, logs);
+  const result = await processLead(SAMPLE_WATI_PAYLOAD, newRequestId(), hubspot, mapping, logs, syncedContacts);
   res.json(result);
 });
 

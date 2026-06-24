@@ -1,4 +1,5 @@
 import { logError, logInfo } from './logger.js';
+import { lastTenDigits } from './phone.js';
 
 const BASE = 'https://api.hubapi.com';
 const MAX_RETRIES = 3;
@@ -87,10 +88,13 @@ export class HubSpotService {
    * `917907893367`, …) by token-searching on the last 10 digits.
    */
   async searchContactByPhone(phone: string, requestId: string): Promise<string | null> {
-    const token = phone.replace(/\D/g, '').slice(-10);
+    const token = lastTenDigits(phone);
     if (token.length < 7) return null;
     const matches = await this.searchContactsByPhones([token], requestId);
-    return matches[0]?.id ?? null;
+    // CONTAINS_TOKEN can return loose matches; only accept one whose stored phone
+    // actually ends in the same last-10 digits, so we never update the wrong contact.
+    const verified = matches.find((m) => m.phone !== null && lastTenDigits(m.phone) === token);
+    return verified?.id ?? null;
   }
 
   /**

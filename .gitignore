@@ -6,5 +6,6 @@ env.local.js
 server/data/mapping.json
 server/data/settings.json
 server/data/conversations.json
+server/data/synced-contacts.json
 desktop.ini
 *.log

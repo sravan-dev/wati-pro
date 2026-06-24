@@ -258,6 +258,10 @@ export default function WatiContacts() {
                       if (state?.status === 'busy') {
                         return <span className="text-slate-500">{state.message}</span>;
                       }
+                      // Succeeded — no Update button, so it can't be pushed twice.
+                      if (state?.status === 'done') {
+                        return <span className="text-green-600">{state.message}</span>;
+                      }
                       return (
                         <span className="flex items-center gap-2">
                           <button
@@ -266,13 +270,8 @@ export default function WatiContacts() {
                           >
                             Update
                           </button>
-                          {state && (
-                            <span
-                              className={
-                                state.status === 'done' ? 'text-green-600' : 'max-w-40 truncate text-red-600'
-                              }
-                              title={state.message}
-                            >
+                          {state?.status === 'failed' && (
+                            <span className="max-w-40 truncate text-red-600" title={state.message}>
                               {state.message}
                             </span>
                           )}
