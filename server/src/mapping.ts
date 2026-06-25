@@ -33,6 +33,7 @@ export const DEFAULT_MAPPING: Mapping = {
   rows: [
     { watiAttribute: 'whatsapp_*', hubspotProperty: 'phone', hubspotType: 'string', transform: 'normalizePhone' },
     { watiAttribute: 'source_url', hubspotProperty: 'wati_source_url', hubspotType: 'string', transform: 'none' },
+    { watiAttribute: 'campaign_name', hubspotProperty: 'hs_analytics_source_data_2', hubspotType: 'string', transform: 'none' },
   ],
 };
 
