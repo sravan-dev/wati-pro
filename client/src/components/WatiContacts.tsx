@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type WatiContact } from '../api';
+import TableSkeleton from './TableSkeleton';
+
+const COLUMNS = ['Name', 'Phone', 'Source', 'Campaign', 'Channel', 'source_url', 'Created', 'Sync', 'Action'];
 
 type Filter = 'all' | 'inbox' | 'ctwa' | 'sourceUrl';
 
@@ -168,10 +171,8 @@ export default function WatiContacts() {
 
       {error ? (
         <p className="text-xs text-red-600">{error}</p>
-      ) : loading ? (
-        <p className="text-xs text-slate-500">
-          {filter === 'all' ? 'Loading…' : 'Scanning recent Wati contacts…'}
-        </p>
+      ) : loading && contacts.length === 0 ? (
+        <TableSkeleton columns={COLUMNS} rows={filter === 'all' ? PAGE_SIZE : 7} />
       ) : contacts.length === 0 ? (
         <p className="text-xs text-slate-500">No contacts found.</p>
       ) : (

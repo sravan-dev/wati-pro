@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Conversation } from '../api';
+import TableSkeleton from './TableSkeleton';
 
 const PAGE_SIZE = 7;
+const COLUMNS = ['Name', 'Phone', 'Last message', 'When', 'Unread'];
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
@@ -103,6 +105,8 @@ export default function LiveInbox() {
 
       {error ? (
         <p className="text-xs text-red-600">{error}</p>
+      ) : loading && chats.length === 0 ? (
+        <TableSkeleton columns={COLUMNS} rows={PAGE_SIZE} />
       ) : chats.length === 0 ? (
         <p className="text-xs text-slate-500">
           No conversations yet. Once the Wati message webhook is configured, incoming chats appear here.
